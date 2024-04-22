@@ -1,0 +1,28 @@
+{
+  "name": "veeblog",
+  "version": "1.0.0",
+  "description": "",
+  "main": "app.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "devStart": "nodemon app.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "dotenv": "^16.4.5",
+    "ejs": "^3.1.10",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^8.5.1",
+    "mongodb": "^6.5.0",
+    "mongoose": "^8.3.2",
+    "winston": "^3.13.0"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "nodemon": "^3.1.0",
+    "supertest": "^6.3.4"
+  }
+}
