@@ -1,45 +1,73 @@
 
 const Article = require('../model/Article')
+const redisClient = require('../cache/redis')
+
+
+
+
 
 
 //Logged in and not Logged in users can access the list of aricle
 const showAll = async (req, res) => {
     try {
-        const page = parseInt(req.query.page) || 1; 
-        const limit = parseInt(req.query.limit) || 20; 
-        const skip = (page - 1) * limit; 
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 20;
+        const skip = (page - 1) * limit;
 
-        // Construct  search filter based on query parameters
+        // Construct the search filter based on query parameters
         const filter = {};
         if (req.query.author) {
             filter.author = req.query.author;
         }
         if (req.query.title) {
-            filter.title = { $regex: req.query.title, $options: 'i' }; 
+            filter.title = { $regex: req.query.title, $options: 'i' };
         }
         if (req.query.tags) {
-            filter.tags = { $in: req.query.tags.split(',') }; // Search for blogs with any of the provided tags
+            filter.tags = { $in: req.query.tags.split(',') };
         }
 
-        // Construct  sort criteria based on query parameters
-        let sortCriteria = {};
-        const order = req.query.order;
-        if (order === 'read_count' || order === '-read_count' || order === 'reading_time' || order === '-reading_time' || order === 'timestamp' || order === '-timestamp') {
-            sortCriteria[order] = 1; // Sort in ascending order by default
+        // Construct the sort criteria based on query parameters
+        const sortCriteria = {};
+        if (req.query.order) {
+            const order = req.query.order.startsWith('-') ? -1 : 1;
+            const field = req.query.order.replace('-', '');
+            if (['read_count', 'reading_time', 'timestamp'].includes(field)) {
+                sortCriteria[field] = order;
+            }
         }
 
-        // Find articles based on the constructed filter and sort criteria
+        // Create a unique cache key based on the query parameters
+        const cacheKey = `/api/v1/articles?page=${page}&limit=${limit}&author=${req.query.author || ''}&title=${req.query.title || ''}&tags=${req.query.tags || ''}&order=${req.query.order || ''}`;
+
+
+        // Check the cache first
+        const cachedData = await redisClient.get(cacheKey);
+        if (cachedData) {
+            console.log('Returning data from cache');
+            return res.json({
+                data: JSON.parse(cachedData),
+                error: null
+            });
+        }
+
+        // Query the database with the constructed filter and sort criteria
         const articles = await Article.find(filter)
             .sort(sortCriteria)
             .skip(skip)
             .limit(limit);
 
-        res.status(200).json(articles);
+        // Store the result in the cache
+        await redisClient.setEx(cacheKey, 10 * 60, JSON.stringify(articles));
+
+        console.log('Returning data from database');
+        return res.status(200).json(articles);
     } catch (error) {
-        console.error('Error listing blogs:', error);
-        res.status(500).json({ error: 'Could not find blogs' });
+        console.error('Error listing articles:', error);
+        res.status(500).json({ error: 'Could not find articles' });
     }
 };
+
+
 
 
 
@@ -59,7 +87,7 @@ const createArticle = async (req, res) => {
 
         // Add reading time to the article data
         req.body.reading_time = readingTime;
-        req.body.status = "draft"; 
+        req.body.status = "draft";
 
         // Create the article
         const article = await Article.create(req.body);
@@ -100,18 +128,18 @@ const showSingle = async (req, res) => {
 
 const updateArticle = async (req, res) => {
     try {
-        const {id: articleID} = req.params
+        const { id: articleID } = req.params
         const { status } = req.body;
 
-const article = await Task.findOneAndUpdate({_id: articleID}, req.body,{
-new: true,
-runValidators: true,
-})
-if(!task){
-        return res.status(404).json({ msg: `No Article with id : ${articleID}` })
-    }
-    res.status(200).json(article)
-        
+        const article = await Task.findOneAndUpdate({ _id: articleID }, req.body, {
+            new: true,
+            runValidators: true,
+        })
+        if (!task) {
+            return res.status(404).json({ msg: `No Article with id : ${articleID}` })
+        }
+        res.status(200).json(article)
+
     } catch (error) {
         es.status(500).json({ msg: error });
     }
@@ -120,17 +148,17 @@ if(!task){
 
 const deleteArticle = async (req, res) => {
     try {
-        const {id: articleID} = req. params
-    const article = await Article.findOne({_id: articleID})
+        const { id: articleID } = req.params
+        const article = await Article.findOne({ _id: articleID })
 
-if (!article){
-    return res.status(404).json({ msg: `No Article with id : ${articleID}` }) 
-}
-res.status(200).json(article);
+        if (!article) {
+            return res.status(404).json({ msg: `No Article with id : ${articleID}` })
+        }
+        res.status(200).json(article);
     } catch (error) {
-       res.status(500).json({ msg: error }); 
+        res.status(500).json({ msg: error });
     }
-    
+
 };
 
 
@@ -141,6 +169,5 @@ module.exports = {
     updateArticle,
     deleteArticle
 };
-
 
 
